@@ -47,7 +47,7 @@ const AddScreen = () => {
     const newPost = {
       id: uuid.v4().toString(),
       contentUri: media.uri,
-      avatarUri: '',
+      avatarUri: 'https://i.pravatar.cc/150?img=65',
       username: 'Jeevith',
       likes: 0,
       caption,

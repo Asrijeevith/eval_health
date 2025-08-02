@@ -25,6 +25,7 @@
     "react-native-image-picker": "^8.2.1",
     "react-native-instagram-story-circle": "^0.1.9",
     "react-native-linear-gradient": "^2.8.3",
+    "react-native-pager-view": "^6.8.1",
     "react-native-pdf": "^6.7.7",
     "react-native-permissions": "^5.4.2",
     "react-native-reanimated": "^3.18.0",

@@ -6,7 +6,6 @@ import {
   FlatList,
   StyleSheet,
   Image,
-  ScrollView,
   Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
@@ -78,30 +77,21 @@ const Body = () => {
         />
       )}
 
-{item.contentType === 'pdf' && (
-  <View style={{ height: 600, width: '100%' }}>
-    <ScrollView nestedScrollEnabled={true}>
-      <View style={{ height: 1000 }}>
-        <Pdf
-          source={{ uri: item.contentUri }}
-          style={{ height: 1000, width: '100%' }}
-          trustAllCerts={false}
-          horizontal={false}
-          enablePaging={false}
-          enableAnnotationRendering={true}
-          onLoadComplete={(numberOfPages) => {
-            console.log(`Number of pages: ${numberOfPages}`);
-          }}
-          onError={(error) => {
-            console.log('PDF error:', error);
-          }}
-        />
-      </View>
-    </ScrollView>
-  </View>
-)}
-
-
+      {item.contentType === 'pdf' && (
+        <View style={styles.pdfContainer}>
+          <Pdf
+            source={{ uri: item.contentUri }}
+            style={styles.pdf}
+            trustAllCerts={false}
+            enableAnnotationRendering
+            horizontal={true}
+            enablePaging={true}
+            spacing={0}
+            onLoadComplete={(numPages) => console.log(`PDF pages: ${numPages}`)}
+            onError={(err) => console.log('PDF error:', err)}
+          />
+        </View>
+      )}
 
 
       {/* Footer */}
@@ -205,16 +195,16 @@ const styles = StyleSheet.create({
     height: 400,
     backgroundColor: 'black',
   },
- pdfContainer: {
-  height: 600, // Allows vertical scroll inside PDF
-  width: '100%',
-  backgroundColor: '#f2f2f2',
-},
-pdf: {
-  flex: 1,
-  width: '100%',
-},
+  pdfContainer: {
+    height: Dimensions.get('window').height * 0.75, // or fixed like 600
+    width: '100%',
+    backgroundColor: '#f9f9f9',
+  },
 
+  pdf: {
+    flex: 1,
+    width: '100%',
+  },
 
   postFooter: {
     flexDirection: 'row',
@@ -250,19 +240,19 @@ pdf: {
     paddingLeft: 10,
     backgroundColor: '#ffffffff',
   },
-  storyItem: {
+  storyItem: {
     alignItems: 'center',
     marginRight: 14,
   },
 
 
-   storyAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 33,
-    marginBottom: 4,
-    borderWidth: 2,
-    borderColor: '#c13584', // Instagram-style ring
-  },
+  storyAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 33,
+    marginBottom: 4,
+    borderWidth: 2,
+    borderColor: '#c13584', // Instagram-style ring
+  },
 
 });

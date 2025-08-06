@@ -1,41 +1,61 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import data from '../data/sample.json'; 
+import { PostType } from '../type/postType';
 
-const postsSlice = createSlice({
+
+interface PostState {
+  posts: PostType[];
+  isStoryModalVisible: boolean; // Add for story modal visibility
+  currentStory: PostType | null; // Add for current story
+}
+
+const initialState: PostState = {
+  posts: [],
+  isStoryModalVisible: false, // Initialize
+  currentStory: null, // Initialize
+};
+
+const postSlice = createSlice({
   name: 'posts',
-  initialState: {
-    posts: data,
-  },
+  initialState,
   reducers: {
-    toggleLike: (state, action) => {
-      const post = state.posts.find((p) => p.id === action.payload);
+    toggleLike: (state, action: PayloadAction<string>) => {
+      const post = state.posts.find(p => p.id === action.payload);
       if (post) {
         post.liked = !post.liked;
         post.likes += post.liked ? 1 : -1;
       }
     },
-    toggleSave: (state, action) => {
-      const post = state.posts.find((p) => p.id === action.payload);
+    toggleSave: (state, action: PayloadAction<string>) => {
+      const post = state.posts.find(p => p.id === action.payload);
       if (post) {
         post.saved = !post.saved;
       }
     },
-    toggleComment: (state, action) => {
-      const post = state.posts.find((p) => p.id === action.payload);
+    toggleComment: (state, action: PayloadAction<string>) => {
+      const post = state.posts.find(p => p.id === action.payload);
       if (post) {
         post.comments = (post.comments || 0) + 1;
       }
     },
-    toggleShare: (state, action) => {
-      const post = state.posts.find((p) => p.id === action.payload);
+    toggleShare: (state, action: PayloadAction<string>) => {
+      const post = state.posts.find(p => p.id === action.payload);
       if (post) {
         post.shares = (post.shares || 0) + 1;
       }
     },
-
-    // ✅ ADD THIS
-    addPost: (state, action: PayloadAction<any>) => {
-      state.posts.unshift(action.payload); // add to top of feed
+    addPost: (state, action: PayloadAction<PostType>) => {
+      state.posts.unshift(action.payload);
+    },
+    setPosts: (state, action: PayloadAction<PostType[]>) => {
+      state.posts = action.payload;
+    },
+    openStoryModal: (state, action: PayloadAction<PostType>) => {
+      state.isStoryModalVisible = true;
+      state.currentStory = action.payload;
+    },
+    closeStoryModal: (state) => {
+      state.isStoryModalVisible = false;
+      state.currentStory = null;
     },
   },
 });
@@ -45,7 +65,10 @@ export const {
   toggleSave,
   toggleComment,
   toggleShare,
-  addPost, // ✅ Export this too
-} = postsSlice.actions;
+  addPost,
+  setPosts,
+  openStoryModal,
+  closeStoryModal,
+} = postSlice.actions;
 
-export default postsSlice.reducer;
+export default postSlice.reducer;

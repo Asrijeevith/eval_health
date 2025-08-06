@@ -5,6 +5,8 @@ import { launchCamera, launchImageLibrary, Asset } from 'react-native-image-pick
 import { useDispatch } from 'react-redux';
 import { addPost } from '../features/PostsSlice';
 import uuid from 'react-native-uuid';
+import database from '../database'; // Import WatermelonDB
+import Post from '../model/post'; // Import Post model
 
 const AddScreen = () => {
   const [caption, setCaption] = useState('');
@@ -32,7 +34,7 @@ const AddScreen = () => {
     }
   };
 
-  const handlePost = () => {
+  const handlePost = async () => {
     if (!media?.uri) {
       Alert.alert('No media selected');
       return;
@@ -55,8 +57,32 @@ const AddScreen = () => {
       saved: false,
       comments: 0,
       shares: 0,
-      contentType,
+      contentType: contentType as 'image' | 'video' | 'pdf', // Type assertion
     };
+
+    // Save to WatermelonDB
+    try {
+      const postsCollection = database.get<Post>('posts');
+      await database.write(async () => {
+        await postsCollection.create(post => {
+          post._raw.id = newPost.id; // Set ID explicitly
+          post.contentUri = newPost.contentUri;
+          post.avatarUri = newPost.avatarUri;
+          post.username = newPost.username;
+          post.likes = newPost.likes;
+          post.caption = newPost.caption;
+          post.liked = newPost.liked;
+          post.saved = newPost.saved;
+          post.comments = newPost.comments;
+          post.shares = newPost.shares;
+          post.contentType = newPost.contentType;
+        });
+      });
+    } catch (error) {
+      console.error('Failed to save post to WatermelonDB:', error);
+      Alert.alert('Error', 'Failed to save post.');
+      return;
+    }
 
     dispatch(addPost(newPost));
     setCaption('');

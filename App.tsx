@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet} from 'react-native';
 import { Provider } from 'react-redux';
 import { store } from './features/Store';
 
@@ -45,5 +45,7 @@ export default App;
 const styles = StyleSheet.create({
   container: {
     flex: 1, 
+    paddingBottom: 20,
+  
   },
 });

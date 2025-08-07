@@ -1,28 +1,41 @@
 import React from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
-import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const Bottom = ({ state, navigation }: BottomTabBarProps) => {
-  const insets = useSafeAreaInsets(); 
-
-  const icons = ['home', 'search', 'plus-square', 'video-camera', 'user'];
-
+const Bottom = ({ state, descriptors, navigation }: any) => {
   return (
-    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
-      {state.routes.map((route, index) => {
+    <View style={styles.container}>
+      {state.routes.map((route: any, index: number) => {
         const isFocused = state.index === index;
+
+        const onPress = () => {
+          const event = navigation.emit({
+            type: 'tabPress',
+            target: route.key,
+            canPreventDefault: true,
+          });
+
+          if (!isFocused && !event.defaultPrevented) {
+            navigation.navigate(route.name);
+          }
+        };
+
+        const iconName = route.name === 'Home' ? 'home' :
+                         route.name === 'Search' ? 'search' :
+                         route.name === 'Add' ? 'plus-square' :
+                         route.name === 'Reels' ? 'video-camera' :
+                         'user';
 
         return (
           <TouchableOpacity
             key={route.key}
-            onPress={() => navigation.navigate(route.name)}
+            onPress={onPress}
+            style={styles.tab}
           >
             <Icon
-              name={icons[index]}
-              size={28}
-              color={isFocused ? '#000' : '#888'}
+              name={iconName}
+              size={24}
+              color={isFocused ? '#000' : '#666'}
             />
           </TouchableOpacity>
         );
@@ -31,15 +44,19 @@ const Bottom = ({ state, navigation }: BottomTabBarProps) => {
   );
 };
 
-export default Bottom;
-
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
     backgroundColor: '#fff',
-    borderTopWidth: 0.5,
-    borderTopColor: '#ccc',
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+    paddingVertical: 10,
+    justifyContent: 'space-around',
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
   },
 });
+
+export default Bottom;

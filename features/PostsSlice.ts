@@ -1,17 +1,16 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { PostType } from '../type/postType';
-
+import { PostType } from './postType';
 
 interface PostState {
   posts: PostType[];
-  isStoryModalVisible: boolean; // Add for story modal visibility
-  currentStory: PostType | null; // Add for current story
+  isStoryModalVisible: boolean;
+  currentStory: PostType | null;
 }
 
 const initialState: PostState = {
   posts: [],
-  isStoryModalVisible: false, // Initialize
-  currentStory: null, // Initialize
+  isStoryModalVisible: false,
+  currentStory: null,
 };
 
 const postSlice = createSlice({
@@ -19,26 +18,26 @@ const postSlice = createSlice({
   initialState,
   reducers: {
     toggleLike: (state, action: PayloadAction<string>) => {
-      const post = state.posts.find(p => p.id === action.payload);
+      const post = state.posts.find((p: PostType) => p.id === action.payload);
       if (post) {
         post.liked = !post.liked;
         post.likes += post.liked ? 1 : -1;
       }
     },
     toggleSave: (state, action: PayloadAction<string>) => {
-      const post = state.posts.find(p => p.id === action.payload);
+      const post = state.posts.find((p: PostType) => p.id === action.payload);
       if (post) {
         post.saved = !post.saved;
       }
     },
     toggleComment: (state, action: PayloadAction<string>) => {
-      const post = state.posts.find(p => p.id === action.payload);
+      const post = state.posts.find((p: PostType) => p.id === action.payload);
       if (post) {
         post.comments = (post.comments || 0) + 1;
       }
     },
     toggleShare: (state, action: PayloadAction<string>) => {
-      const post = state.posts.find(p => p.id === action.payload);
+      const post = state.posts.find((p: PostType) => p.id === action.payload);
       if (post) {
         post.shares = (post.shares || 0) + 1;
       }

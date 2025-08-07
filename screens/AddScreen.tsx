@@ -5,8 +5,10 @@ import { launchCamera, launchImageLibrary, Asset } from 'react-native-image-pick
 import { useDispatch } from 'react-redux';
 import { addPost } from '../features/PostsSlice';
 import uuid from 'react-native-uuid';
-import database from '../database'; // Import WatermelonDB
-import Post from '../model/post'; // Import Post model
+import database from '../database';
+import Post from '../model/post';
+import User from '../model/user';
+import { Q } from '@nozbe/watermelondb';
 
 const AddScreen = () => {
   const [caption, setCaption] = useState('');
@@ -46,29 +48,47 @@ const AddScreen = () => {
       ? 'pdf'
       : 'image';
 
+    // Find or create user
+    const usersCollection = database.get<User>('users');
+    const users = await usersCollection.query(Q.where('username', 'Jeevith')).fetch();
+    let user: User;
+    if (users.length === 0) {
+      user = await database.write(async () => {
+        return await usersCollection.create(u => {
+          u._raw.id = uuid.v4().toString();
+          u.username = 'Jeevith';
+          u.avatarUri = 'https://i.pravatar.cc/150?img=65';
+        });
+      });
+    } else {
+      user = users[0];
+    }
+
     const newPost = {
       id: uuid.v4().toString(),
       contentUri: media.uri,
-      avatarUri: 'https://i.pravatar.cc/150?img=65',
-      username: 'Jeevith',
+      userId: user.id,
+      user: {
+        id: user.id,
+        username: user.username,
+        avatarUri: user.avatarUri,
+      },
       likes: 0,
       caption,
       liked: false,
       saved: false,
       comments: 0,
       shares: 0,
-      contentType: contentType as 'image' | 'video' | 'pdf', // Type assertion
+      contentType: contentType as 'image' | 'video' | 'pdf',
     };
 
-    // Save to WatermelonDB
     try {
       const postsCollection = database.get<Post>('posts');
       await database.write(async () => {
         await postsCollection.create(post => {
-          post._raw.id = newPost.id; // Set ID explicitly
+          post._raw.id = newPost.id;
           post.contentUri = newPost.contentUri;
-          post.avatarUri = newPost.avatarUri;
-          post.username = newPost.username;
+          post.userId = newPost.userId;
           post.likes = newPost.likes;
           post.caption = newPost.caption;
           post.liked = newPost.liked;

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
   View,
@@ -24,7 +25,8 @@ const Header = () => {
           </TouchableOpacity>
         </View>
       </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    
   );
 };
 
@@ -33,6 +35,7 @@ export default Header;
 const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: '#fff',
+    
   },
   header: {
     height: 60,

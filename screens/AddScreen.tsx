@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import {View,Text,StyleSheet,TouchableOpacity,TextInput,Image,ScrollView,Alert} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image, ScrollView, Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { launchCamera, launchImageLibrary, Asset } from 'react-native-image-picker';
 import { useDispatch } from 'react-redux';
 import { addPost } from '../features/PostsSlice';
 import uuid from 'react-native-uuid';
+import RNFS from 'react-native-fs';
 import database from '../database';
 import Post from '../model/post';
 import User from '../model/user';
@@ -48,25 +49,48 @@ const AddScreen = () => {
       ? 'pdf'
       : 'image';
 
+    // Save media to persistent storage
+    const postId = uuid.v4().toString();
+    const fileName = `${postId}.${contentType === 'image' ? 'jpg' : contentType === 'video' ? 'mp4' : 'pdf'}`;
+    const destPath = `${RNFS.DocumentDirectoryPath}/media/${fileName}`;
+    console.log('AddScreen: Saving media for post:', postId, 'Source URI:', media.uri, 'Dest:', destPath);
+
+    try {
+      // Create media directory if it doesn't exist
+      await RNFS.mkdir(`${RNFS.DocumentDirectoryPath}/media`);
+      // Copy file to persistent storage
+      await RNFS.copyFile(media.uri, destPath);
+      console.log('AddScreen: Media copied to:', destPath);
+    } catch (error) {
+      console.error('AddScreen: Failed to save media:', error);
+      Alert.alert('Error', 'Failed to save media.');
+      return;
+    }
+
+    const contentUri = `file://${destPath}`;
+
     // Find or create user
     const usersCollection = database.get<User>('users');
     const users = await usersCollection.query(Q.where('username', 'Jeevith')).fetch();
     let user: User;
     if (users.length === 0) {
+      console.log('AddScreen: Creating new user...');
       user = await database.write(async () => {
         return await usersCollection.create(u => {
           u._raw.id = uuid.v4().toString();
           u.username = 'Jeevith';
-          u.avatarUri = 'https://i.pravatar.cc/150?img=65';
+          u.avatarUri = 'https://www.giantbomb.com/a/uploads/square_small/46/462814/3222927-6826564307-latest.jpg'; // Replace with actual avatar URI
         });
       });
+      console.log('AddScreen: Created user:', user._raw);
     } else {
       user = users[0];
+      console.log('AddScreen: Using existing user:', user._raw);
     }
 
     const newPost = {
-      id: uuid.v4().toString(),
-      contentUri: media.uri,
+      id: postId,
+      contentUri,
       userId: user.id,
       user: {
         id: user.id,
@@ -84,30 +108,31 @@ const AddScreen = () => {
 
     try {
       const postsCollection = database.get<Post>('posts');
-      await database.write(async () => {
-        await postsCollection.create(post => {
-          post._raw.id = newPost.id;
-          post.contentUri = newPost.contentUri;
-          post.userId = newPost.userId;
-          post.likes = newPost.likes;
-          post.caption = newPost.caption;
-          post.liked = newPost.liked;
-          post.saved = newPost.saved;
-          post.comments = newPost.comments;
-          post.shares = newPost.shares;
-          post.contentType = newPost.contentType;
+      const createdPost = await database.write(async () => {
+        const newPostRecord = await postsCollection.create(record => {
+          record._raw.id = newPost.id;
+          record.contentUri = newPost.contentUri;
+          record.userId = newPost.userId;
+          record.likes = newPost.likes;
+          record.caption = newPost.caption;
+          record.liked = newPost.liked;
+          record.saved = newPost.saved;
+          record.comments = newPost.comments;
+          record.shares = newPost.shares;
+          record.contentType = newPost.contentType;
         });
+        return newPostRecord;
       });
-    } catch (error) {
-      console.error('Failed to save post to WatermelonDB:', error);
-      Alert.alert('Error', 'Failed to save post.');
-      return;
-    }
+      console.log('AddScreen: Post created in DB:', createdPost._raw);
 
-    dispatch(addPost(newPost));
-    setCaption('');
-    setMedia(null);
-    Alert.alert('Posted!', 'Your post has been added.');
+      dispatch(addPost(newPost));
+      setCaption('');
+      setMedia(null);
+      Alert.alert('Posted!', 'Your post has been added.');
+    } catch (error) {
+      console.error('AddScreen: Failed to save post to WatermelonDB:', error);
+      Alert.alert('Error', 'Failed to save post.');
+    }
   };
 
   return (

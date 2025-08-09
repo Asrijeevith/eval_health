@@ -31,7 +31,7 @@ import {
 } from '../features/PostsSlice';
 import Icon2 from 'react-native-vector-icons/AntDesign';
 import database from '../database';
-import Post from '../model/Post';
+import Post from '../model/post';
 import { Q } from '@nozbe/watermelondb';
 
 const safeStringify = (obj: any) => {
@@ -46,8 +46,9 @@ const safeStringify = (obj: any) => {
     return value;
   }, 2);
 };
+
 const FALLBACK_URLS = {
-  image: 'https://picsum.photos/200/300',
+  image: 'https://via.placeholder.com/300x300?text=Image+Failed',
   video: 'https://www.w3schools.com/html/mov_bbb.mp4',
   pdf: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
 };
@@ -71,78 +72,137 @@ const Body = () => {
   const [visibleStoryId, setVisibleStoryId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const hasFetched = useRef(false); // Prevent multiple fetches
+  const hasCleaned = useRef(false); // Prevent multiple cleanups
 
   const progress = useRef(new Animated.Value(0)).current;
   const [isPaused, setIsPaused] = useState(false);
 
   const storyDuration = 30000;
 
+  // Clean up duplicate posts by ID
+  const cleanDuplicatePosts = async () => {
+    if (hasCleaned.current) {
+      console.log('Body: Skipping cleanup, already executed');
+      return;
+    }
+    hasCleaned.current = true;
+    try {
+      console.log('Body: Starting duplicate post cleanup...');
+      const postsCollection = database.get<Post>('posts');
+      const allPosts = await postsCollection.query().fetch();
+      console.log('Body: Total posts before cleanup:', allPosts.length, 'Posts:', allPosts.map(p => ({ id: p.id, contentUri: p.contentUri })));
+
+      // Identify duplicates by ID
+      const hashMap = new Map<string, Post>();
+      const postsToDelete: Post[] = [];
+
+      for (const post of allPosts) {
+        const hash = post.id;
+        if (hashMap.has(hash)) {
+          postsToDelete.push(post);
+        } else {
+          hashMap.set(hash, post);
+        }
+      }
+
+      // Log duplicates
+      const idCounts = allPosts.reduce((acc, post) => {
+        acc[post.id] = (acc[post.id] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      const duplicates = Object.entries(idCounts).filter(([_, count]) => count > 1);
+      if (duplicates.length > 0) {
+        console.warn('Body: Found duplicate post IDs:', duplicates);
+      } else {
+        console.log('Body: No duplicate post IDs detected in cleanup');
+      }
+
+      // Delete duplicates
+      if (postsToDelete.length > 0) {
+        console.log('Body: Preparing to delete', postsToDelete.length, 'duplicate posts');
+        await database.write(async () => {
+          const deletionPromises = postsToDelete.map(post =>
+            post.destroyPermanently().then(() =>
+              console.log('Body: Deleted duplicate post:', post.id, 'URI:', post.contentUri)
+            ).catch(err =>
+              console.error('Body: Failed to delete post:', post.id, safeStringify(err))
+            )
+          );
+          await Promise.all(deletionPromises);
+        });
+        console.log('Body: Completed deletion of', postsToDelete.length, 'duplicate posts');
+      } else {
+        console.log('Body: No duplicates to delete');
+      }
+
+      // Verify cleanup
+      const postsAfterCleanup = await postsCollection.query().fetch();
+      console.log('Body: Posts after cleanup:', postsAfterCleanup.length, 'Posts:', postsAfterCleanup.map(p => ({ id: p.id, contentUri: p.contentUri })));
+    } catch (error) {
+      console.error('Body: Failed to clean duplicate posts:', safeStringify(error));
+    }
+  };
+
+  const fetchPosts = async () => {
+    try {
+      console.log('Body: Fetching posts from WatermelonDB...');
+      const postsCollection = database.get<Post>('posts');
+      const fetchedPosts = await postsCollection.query().fetch();
+      console.log('Body: Fetched posts count:', fetchedPosts.length, 'Posts:', fetchedPosts.map(p => ({ id: p.id, contentUri: p.contentUri, contentType: p.contentType })));
+
+      // Remove duplicates by ID
+      const uniquePosts = Array.from(
+        new Map(fetchedPosts.map(post => [post.id, post])).values()
+      );
+      console.log('Body: Unique posts count:', uniquePosts.length, 'Unique IDs:', uniquePosts.map(p => ({ id: p.id, contentUri: p.contentUri })));
+      uniquePosts.reverse(); // Reverse to maintain original order
+      const postsData = await Promise.all(
+        uniquePosts.map(async (post) => {
+          console.log('Body: Fetching user for post:', post.id);
+          let user;
+          try {
+            user = await post.user.fetch();
+            
+            console.log('Body: User fetched:', user._raw);
+          } catch (error) {
+            console.error('Body: Failed to fetch user for post:', post.id, safeStringify(error));
+             user = { id: '', username: 'Unknown', avatarUri: 'https://i.pravatar.cc/150?img=0' };
+          }
+          return {
+            id: post.id,
+            contentUri: post.contentUri,
+            userId: post.userId,
+            user: {
+              id: user.id,
+              username: user.username,
+              avatarUri: user.avatarUri,
+            },
+            likes: post.likes,
+            caption: post.caption,
+            liked: post.liked,
+            saved: post.saved,
+            comments: post.comments,
+            shares: post.shares,
+            contentType: post.contentType as 'image' | 'video' | 'pdf',
+          };
+          
+        })
+      );
+      console.log('Body: Posts data prepared:', postsData.map(p => ({ id: p.id, contentUri: p.contentUri, contentType: p.contentType })));
+      dispatch(setPosts(postsData)); // Replace Redux state
+    } catch (error) {
+      console.error('Body: Failed to fetch posts from WatermelonDB:', safeStringify(error));
+    }
+  };
+
   useEffect(() => {
     if (hasFetched.current) {
-      console.log('Skipping fetch, already executed');
+      console.log('Body: Skipping initial fetch, already executed');
       return;
     }
     hasFetched.current = true;
-
-    const fetchPosts = async () => {
-      try {
-        console.log('Fetching posts from WatermelonDB...');
-        const postsCollection = database.get<Post>('posts');
-        console.log('Posts collection accessed:', postsCollection);
-        const fetchedPosts = await postsCollection.query().fetch();
-        console.log('Fetched posts count:', fetchedPosts.length, 'Posts:', fetchedPosts.map(p => ({ id: p.id, contentUri: p.contentUri, contentType: p.contentType })));
-        
-        // Remove duplicates by ID
-        const uniquePosts = Array.from(
-          new Map(fetchedPosts.map(post => [post.id, post])).values()
-        );
-        console.log('Unique posts count:', uniquePosts.length);
-
-        // Limit to expected number of posts (3)
-        if (uniquePosts.length > 3) {
-          console.warn('Unexpected post count, limiting to 3 posts');
-          uniquePosts.splice(3);
-        }
-
-        const postsData = await Promise.all(
-          uniquePosts.map(async (post) => {
-            console.log('Fetching user for post:', post.id);
-            let user;
-            try {
-              user = await post.user.fetch();
-              console.log('User fetched:', user._raw);
-            } catch (error) {
-              console.error('Failed to fetch user for post:', post.id, safeStringify(error));
-              user = { id: '', username: 'Unknown', avatarUri: 'https://i.pravatar.cc/150?img=0' };
-            }
-            return {
-              id: post.id,
-              contentUri: post.contentUri,
-              userId: post.userId,
-              user: {
-                id: user.id,
-                username: user.username,
-                avatarUri: user.avatarUri,
-              },
-              likes: post.likes,
-              caption: post.caption,
-              liked: post.liked,
-              saved: post.saved,
-              comments: post.comments,
-              shares: post.shares,
-              contentType: post.contentType as 'image' | 'video' | 'pdf',
-            };
-          })
-        );
-        console.log('Posts data prepared:', postsData.map(p => ({ id: p.id, contentUri: p.contentUri, contentType: p.contentType })));
-        dispatch(setPosts(postsData)); // Replace, don't append
-      } catch (error) {
-        console.error('Failed to fetch posts from WatermelonDB:', safeStringify(error));
-      }
-    };
-    // Reset posts before fetching to avoid duplicates
-    dispatch(setPosts([]));
-    fetchPosts();
+    dispatch(setPosts([])); // Reset posts
+    cleanDuplicatePosts().then(fetchPosts);
   }, [dispatch]);
 
   const updatePostInWatermelon = async (postId: string, updates: Partial<Post>) => {
@@ -156,10 +216,10 @@ const Body = () => {
           });
         });
       } else {
-        console.warn('Post not found for update:', postId);
+        console.warn('Body: Post not found for update:', postId);
       }
     } catch (error) {
-      console.error('Failed to update post in WatermelonDB:', safeStringify(error));
+      console.error('Body: Failed to update post in WatermelonDB:', safeStringify(error));
     }
   };
 
@@ -232,7 +292,7 @@ const Body = () => {
     };
   }, [isStoryModalVisible, storyIndex, startProgressBar, progress]);
 
-  const renderContent = (item: any, isStory = false) => {
+  const renderContent = (item: { id: string; contentUri: string; contentType: 'image' | 'video' | 'pdf' }, isStory = false) => {
     let uri = item.contentUri ? `${item.contentUri}?t=${Date.now()}` : '';
     const isVideo = item.contentType === 'video';
     const isPdf = item.contentType === 'pdf';
@@ -241,12 +301,12 @@ const Body = () => {
       : item.id === visiblePostId;
 
     // Check for invalid URLs and use fallback
-    if (uri.includes('example.com')) {
-      console.warn(`Invalid URI detected for post ${item.id}: ${uri}, using fallback`);
+    if (!uri || uri.includes('example.com') || !uri.startsWith('file://')) {
+      console.warn(`Body: Invalid or non-local URI detected for post ${item.id}: ${uri}, using fallback`);
       uri = FALLBACK_URLS[item.contentType] + `?t=${Date.now()}`;
     }
 
-    console.log('Rendering content for post:', item.id, 'URI:', uri, 'Type:', item.contentType);
+    console.log('Body: Rendering content for post:', item.id, 'URI:', uri, 'Type:', item.contentType);
 
     if (!uri) {
       return (
@@ -267,8 +327,8 @@ const Body = () => {
           controls={isStory ? false : true}
           paused={!shouldPlay}
           repeat
-          onError={(error) => console.error('Video load error for post', item.id, 'URI:', uri, 'Error:', safeStringify(error))}
-          onLoad={() => console.log('Video loaded for post:', item.id, 'URI:', uri)}
+          onError={(error) => console.error('Body: Video load error for post', item.id, 'URI:', uri, 'Error:', safeStringify(error))}
+          onLoad={() => console.log('Body: Video loaded for post:', item.id, 'URI:', uri)}
         />
       );
     } else if (isPdf) {
@@ -279,8 +339,8 @@ const Body = () => {
           horizontal={true}
           enablePaging={true}
           trustAllCerts={false}
-          onError={(error) => console.error('PDF load error for post', item.id, 'URI:', uri, 'Error:', safeStringify(error))}
-          onLoadComplete={() => console.log('PDF loaded for post:', item.id, 'URI:', uri)}
+          onError={(error) => console.error('Body: PDF load error for post', item.id, 'URI:', uri, 'Error:', safeStringify(error))}
+          onLoadComplete={() => console.log('Body: PDF loaded for post:', item.id, 'URI:', uri)}
         />
       );
     } else {
@@ -288,16 +348,16 @@ const Body = () => {
         <Image
           source={{ uri }}
           style={styles.media as ImageStyle}
-          onError={(error) => console.error('Image load error for post', item.id, 'URI:', uri, 'Error:', safeStringify(error))}
-          onLoad={() => console.log('Image loaded for post:', item.id, 'URI:', uri)}
-          defaultSource={{ uri: 'https://via.placeholder.com/300x300?text=Image+Failed' }}
+          onError={(error) => console.error('Body: Image load error for post', item.id, 'URI:', uri, 'Error:', safeStringify(error))}
+          onLoad={() => console.log('Body: Image loaded for post:', item.id, 'URI:', uri)}
+          defaultSource={{ uri: FALLBACK_URLS.image }}
         />
       );
     }
   };
 
   const renderPost = ({ item }: any) => {
-    console.log('Rendering post:', item.id, 'Total posts:', posts.length, 'Posts:', posts.map(p => p.id));
+    console.log('Body: Rendering post:', item.id, 'Total posts:', posts.length, 'Posts:', posts.map(p => ({ id: p.id, contentUri: p.contentUri })));
     return (
       <View style={styles.postContainer}>
         <View style={styles.postHeader}>
@@ -392,7 +452,6 @@ const Body = () => {
           />
         }
       />
-
       <Modal visible={isStoryModalVisible} animationType="fade" transparent>
         <TouchableWithoutFeedback onPressIn={pauseProgress} onPressOut={resumeProgress}>
           <Pressable style={styles.modalContainer} onPress={handleTap}>
